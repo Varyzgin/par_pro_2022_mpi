@@ -54,29 +54,33 @@ std::vector<int> multMatParallel(const std::vector<int>& A,
     int k = B.size() / n;  // число столбцов в B
 
     const int processes =
-        std::min(std::min(m, k), comm_size);  // число работающих процессов
+        std::min(std::min(m, k), comm_size - 1);  // число работающих процессов
     const int Atasks = m / processes;  // целое число строк на процесс
     const int Aother = m % processes;  // остаток главному процессу
     const int Btasks = k / processes;  // целое число строк на процесс
     const int Bother = k % processes;  // остаток главному процессу
 
-    std::vector<char> buff(Atasks * n * Btasks * n * 2);
+    std::vector<int> buff(m * n * n * k * 2);
 
     int pos;
-    std::vector<int> receivedAPart;
-    std::vector<int> receivedBPart;
     int x;
     int y;
+    std::vector<int> receivedAPart;
+    std::vector<int> receivedBPart;
     std::vector<int> locRes;
 
     std::vector<int> globRes(m * k);
-
     if (rank == 0) {
         std::vector<int> BT =
             transpose(B, k);  // транспонирование для удобной адресации
 
         int insPlace;
-        std::cout << m << ','<< k << ',' << comm_size << '\n';
+        std::cout << "m = " << m << ", k = " << k << ", com = " << comm_size
+                  << ", proc = " << processes
+                  << ", size(buff) = " << buff.size() << std::endl
+                  << "Atasks = " << Atasks << ", Aother = " << Aother
+                  << ", Btasks = " << Btasks << ", Bother = " << Bother
+                  << std::endl;
         if (processes == 1) {
             // Обработка данных на глав. процессе если он единственный
             receivedAPart =
@@ -84,30 +88,29 @@ std::vector<int> multMatParallel(const std::vector<int>& A,
             receivedBPart = std::vector<int>(
                 BT.begin(), BT.begin() + n * (Btasks + Bother));
             globRes = multMat(receivedAPart, transpose(receivedBPart, n), n);
-            std::cout << "Hello\n";
         } else {
             if (Aother > 0) {
                 // обработка особой строки результатов (кроме 0й ячейки)
                 // 0##
                 // 000
                 // 000
-                for (int p = 1; p < processes; p++) {
-                    if (Bother > 0) {
-                        pos = 0;
-                        MPI_Pack(A.data(), n * Aother, MPI_INT, buff.data(),
-                                 buff.size(), &pos, MPI_COMM_WORLD);
-                        MPI_Pack(BT.data() + n * (Bother + Btasks * (p - 1)),
-                                 n * Btasks, MPI_INT, buff.data(), buff.size(),
-                                 &pos, MPI_COMM_WORLD);
-                        MPI_Send(buff.data(), pos, MPI_PACKED, p,
-                                 Bother + Btasks * (p - 1), MPI_COMM_WORLD);
-                    }
+
+                for (int p = 1; p <= processes; p++) {
+                    pos = 0;
+                    MPI_Pack(A.data(), n * Aother, MPI_INT, buff.data(),
+                             buff.size(), &pos, MPI_COMM_WORLD);
+                    MPI_Pack(BT.data() + n * (Bother + Btasks * (p - 1)),
+                             n * Btasks, MPI_INT, buff.data(), buff.size(),
+                             &pos, MPI_COMM_WORLD);
+
+                    MPI_Ssend(buff.data(), pos, MPI_PACKED, p,
+                              Bother + Btasks * (p - 1), MPI_COMM_WORLD);
                 }
-                // если есть особый столбец в матрице B - обработаем ячейку на
-                // главном процессе, пока работают другие процессы
-                // #00
-                // 000
-                // 000
+                //  если есть особый столбец в матрице B - обработаем ячейку на
+                //  главном процессе, пока работают другие процессы
+                //  #00
+                //  000
+                //  000
                 if (Bother > 0) {
                     receivedAPart =
                         std::vector<int>(A.begin(), A.begin() + n * Aother);
@@ -121,31 +124,37 @@ std::vector<int> multMatParallel(const std::vector<int>& A,
                     globRes = LocToGlob(globRes, k, insPlace, locRes, x, y);
                 }
                 // получение данных с других процессов
-                for (int p = 1; p < processes; p++) {
+                for (int p = 1; p <= processes; p++) {
                     MPI_Status status;
                     MPI_Recv(buff.data(), buff.size(), MPI_PACKED, p,
                              MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+
                     pos = 0;
-                    MPI_Unpack(buff.data(), buff.size(), &pos, locRes.data(),
-                               locRes.size(), MPI_INT, MPI_COMM_WORLD);
+
                     MPI_Unpack(buff.data(), buff.size(), &pos, &x, 1, MPI_INT,
                                MPI_COMM_WORLD);
                     MPI_Unpack(buff.data(), buff.size(), &pos, &y, 1, MPI_INT,
                                MPI_COMM_WORLD);
+                    locRes = std::vector<int>(x * y);
+                    MPI_Unpack(buff.data(), buff.size(), &pos, locRes.data(),
+                               locRes.size(), MPI_INT, MPI_COMM_WORLD);
                     insPlace =
                         status.MPI_TAG;  // тэг = начало вст. в матрице рез-в
                     globRes = LocToGlob(globRes, k, insPlace, locRes, x, y);
                 }
             }
-
+            for (int i = 0; i < globRes.size(); i++)
+                std::cout << globRes[i] << ' ';
+            std::cout << std::endl;
             // обработка строк
-            for (int step = 1; step < processes; step++) {
+            for (int step = 1; step <= processes; step++) {
                 // обработка строк (кроме 0го столбца) на др. процессах
                 // 000
                 // 0##
                 // 0##
-                for (int p = 1; p < processes; p++) {
+                for (int p = 1; p <= processes; p++) {
                     pos = 0;
+
                     MPI_Pack(A.data() + n * (Aother + (step - 1) * Atasks),
                              n * Atasks, MPI_INT, buff.data(), buff.size(),
                              &pos, MPI_COMM_WORLD);
@@ -154,10 +163,10 @@ std::vector<int> multMatParallel(const std::vector<int>& A,
                              n * Btasks, MPI_INT, buff.data(), buff.size(),
                              &pos, MPI_COMM_WORLD);
 
-                    MPI_Send(buff.data(), pos, MPI_PACKED, p,
-                             k * (Aother + (step - 1) * Atasks) + Bother +
-                                 (p - 1) * Btasks,
-                             MPI_COMM_WORLD);
+                    MPI_Ssend(buff.data(), pos, MPI_PACKED, p,
+                              k * (Aother + (step - 1) * Atasks) + Bother +
+                                  (p - 1) * Btasks,
+                              MPI_COMM_WORLD);
                 }
                 // если есть особый столбец в матрице B - обработаем его
                 // пошагово на главном процессе, пока работают другие процессы
@@ -177,49 +186,94 @@ std::vector<int> multMatParallel(const std::vector<int>& A,
                     y = receivedAPart.size() / n;
                     globRes = LocToGlob(globRes, k, insPlace, locRes, x, y);
                 }
+                for (int i = 0; i < globRes.size(); i++)
+                    std::cout << globRes[i] << ' ';
+                std::cout << std::endl;
+
                 // получение данных с других процессов
-                for (int p = 1; p < processes; p++) {
+                for (int p = 1; p <= processes; p++) {
                     MPI_Status status;
                     MPI_Recv(buff.data(), buff.size(), MPI_PACKED, p,
-                             MPI_COMM_WORLD, MPI_ANY_TAG, &status);
+                             MPI_ANY_TAG, MPI_COMM_WORLD, &status);
                     pos = 0;
-                    MPI_Unpack(buff.data(), buff.size(), &pos, locRes.data(),
-                               locRes.size(), MPI_INT, MPI_COMM_WORLD);
+
                     MPI_Unpack(buff.data(), buff.size(), &pos, &x, 1, MPI_INT,
                                MPI_COMM_WORLD);
                     MPI_Unpack(buff.data(), buff.size(), &pos, &y, 1, MPI_INT,
                                MPI_COMM_WORLD);
+                    locRes = std::vector<int>(x * y);
+                    MPI_Unpack(buff.data(), buff.size(), &pos, locRes.data(),
+                               locRes.size(), MPI_INT, MPI_COMM_WORLD);
+
                     insPlace = status.MPI_TAG;
                     globRes = LocToGlob(globRes, k, insPlace, locRes, x, y);
+                    for (int i = 0; i < globRes.size(); i++)
+                        std::cout << globRes[i] << ' ';
+                    std::cout << std::endl;
                 }
             }
         }
-    } else if (rank < processes) {
+    } else if (rank <= processes) {
         // код для других процессов
-        MPI_Status status;
+        if (Aother > 0) {
+            MPI_Status status;
+            receivedAPart = std::vector<int>(n * Aother);
+            receivedBPart = std::vector<int>(n * Btasks);
+            MPI_Recv(buff.data(), buff.size(), MPI_PACKED, 0, MPI_ANY_TAG,
+                     MPI_COMM_WORLD, &status);
 
-        MPI_Recv(buff.data(), buff.size(), MPI_PACKED, 0, MPI_ANY_TAG,
-                 MPI_COMM_WORLD, &status);
+            pos = 0;
+            MPI_Unpack(buff.data(), buff.size(), &pos, receivedAPart.data(),
+                       receivedAPart.size(), MPI_INT, MPI_COMM_WORLD);
+            MPI_Unpack(buff.data(), buff.size(), &pos, receivedBPart.data(),
+                       receivedBPart.size(), MPI_INT, MPI_COMM_WORLD);
 
-        pos = 0;
-        MPI_Unpack(buff.data(), buff.size(), &pos, receivedAPart.data(),
-                   receivedAPart.size(), MPI_INT, MPI_COMM_WORLD);
-        MPI_Unpack(buff.data(), buff.size(), &pos, receivedBPart.data(),
-                   receivedBPart.size(), MPI_INT, MPI_COMM_WORLD);
+            x = receivedBPart.size() / n;
+            y = receivedAPart.size() / n;
+            locRes = multMat(receivedAPart, transpose(receivedBPart, n), n);
 
-        x = receivedBPart.size() / n;
-        y = receivedAPart.size() / n;
-        locRes = multMat(receivedAPart, transpose(receivedBPart, n), n);
+            pos = 0;
 
-        pos = 0;
-        MPI_Pack(locRes.data(), locRes.size(), MPI_INT, buff.data(),
-                 buff.size(), &pos, MPI_COMM_WORLD);
-        MPI_Pack(&x, 1, MPI_INT, buff.data(), buff.size(), &pos,
-                 MPI_COMM_WORLD);
-        MPI_Pack(&y, 1, MPI_INT, buff.data(), buff.size(), &pos,
-                 MPI_COMM_WORLD);
-        MPI_Send(buff.data(), pos, MPI_PACKED, 0, status.MPI_TAG,
-                 MPI_COMM_WORLD);
+            MPI_Pack(&x, 1, MPI_INT, buff.data(), buff.size(), &pos,
+                     MPI_COMM_WORLD);
+            MPI_Pack(&y, 1, MPI_INT, buff.data(), buff.size(), &pos,
+                     MPI_COMM_WORLD);
+            MPI_Pack(locRes.data(), locRes.size(), MPI_INT, buff.data(),
+                     buff.size(), &pos, MPI_COMM_WORLD);
+
+            MPI_Ssend(buff.data(), pos, MPI_PACKED, 0, status.MPI_TAG,
+                      MPI_COMM_WORLD);
+        }
+        // обработка следующих строк
+        for (int step = 1; step <= processes; step++) {
+            MPI_Status status;
+            receivedAPart = std::vector<int>(n * Atasks);
+            receivedBPart = std::vector<int>(n * Btasks);
+            MPI_Recv(buff.data(), buff.size(), MPI_PACKED, 0, MPI_ANY_TAG,
+                     MPI_COMM_WORLD, &status);
+
+            pos = 0;
+            MPI_Unpack(buff.data(), buff.size(), &pos, receivedAPart.data(),
+                       receivedAPart.size(), MPI_INT, MPI_COMM_WORLD);
+            MPI_Unpack(buff.data(), buff.size(), &pos, receivedBPart.data(),
+                       receivedBPart.size(), MPI_INT, MPI_COMM_WORLD);
+
+            x = receivedBPart.size() / n;
+            y = receivedAPart.size() / n;
+            locRes = multMat(receivedAPart, transpose(receivedBPart, n), n);
+
+            pos = 0;
+
+            MPI_Pack(&x, 1, MPI_INT, buff.data(), buff.size(), &pos,
+                     MPI_COMM_WORLD);
+            MPI_Pack(&y, 1, MPI_INT, buff.data(), buff.size(), &pos,
+                     MPI_COMM_WORLD);
+            MPI_Pack(locRes.data(), locRes.size(), MPI_INT, buff.data(),
+                     buff.size(), &pos, MPI_COMM_WORLD);
+
+            MPI_Ssend(buff.data(), pos, MPI_PACKED, 0, status.MPI_TAG,
+                      MPI_COMM_WORLD);
+        }
     }
     return globRes;
 }
