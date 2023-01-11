@@ -13,6 +13,7 @@ std::vector<int> genRandomMatrix(int m, int n) {
     std::mt19937 gen(dev());
     std::vector<int> matrix(m * n);
     for (int i = 0; i < m * n; i++) matrix[i] = gen() % 10000;
+    
     return matrix;
 }
 std::vector<int> transpose(const std::vector<int>& B, int k) {
