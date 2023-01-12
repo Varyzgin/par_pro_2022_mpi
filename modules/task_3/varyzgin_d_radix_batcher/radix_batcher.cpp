@@ -28,7 +28,6 @@ int find_size_of_pow2(int val1, int val2) {
 }
 bool is_pow2(int val) { return (!(val & (val - 1))); }
 
-
 std::vector<double> batcher_merge(std::vector<double> first,
                                   std::vector<double> second) {
     std::vector<double> res;
@@ -111,12 +110,11 @@ void sorter(double* arr, int size, int iter, int base, int* negatives_cnt) {
 }
 void radix_sort(double* arr, int size) {
     int bits = 8;
-    int base = 1 << bits; // побитовый сдвиг влево на 8
+    int base = 1 << bits;  // побитовый сдвиг влево на 8
     int iters = (sizeof(double) * 8) / bits;
     int negatives = 0;
 
-    for (int i = 0; i < iters; i++)
-        sorter(arr, size, i, base, &(negatives));
+    for (int i = 0; i < iters; i++) sorter(arr, size, i, base, &(negatives));
 
     if (negatives == 0) return;
 
@@ -135,8 +133,8 @@ std::vector<double> radixBatcherParallel(std::vector<double> globVec) {
     int tasks = globVec.size() / comm_size;
     std::vector<double> locVec(tasks);
 
-    MPI_Scatter(globVec.data(), tasks, MPI_DOUBLE, locVec.data(), tasks, MPI_DOUBLE,
-                0, MPI_COMM_WORLD);
+    MPI_Scatter(globVec.data(), tasks, MPI_DOUBLE, locVec.data(), tasks,
+                MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
     radix_sort(locVec.data(), locVec.size());
 

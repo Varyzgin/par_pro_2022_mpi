@@ -1,29 +1,50 @@
 // Copyright 2023 Varyzgin Dmitriy
 
 #include <gtest/gtest.h>
-#include <vector>
+
 #include "./mult_mat_hor_vert.h"
+
 #include <gtest-mpi-listener.hpp>
 
-TEST(Multiply, MultMatrix) {
+TEST(Multiply, MultMatrix532) {
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    int MonN = 25; // 15, 25
-    int NonK = 25; // 6, 25
-    int MonK = 25; // 10, 25
-    int n = 5; // 3, 5
+    int MonN = 15;  // 15, 25
+    int NonK = 6;   // 6, 25
+    int MonK = 10;  // 10, 25
+    int n = 3;      // 3, 5
     std::vector<int> res = {80, 40, 77, 37, 67, 35, 51, 31, 44, 28};
     std::vector<int> A(MonN);
     std::vector<int> B(NonK);
     std::vector<int> Res(MonK, 0);
 
-    //A = {1, 7, 3, 2, 1, 9, 3, 2, 6, 4, 4, 1, 5, 1, 3};
-    //B = {3, 3, 8, 4, 7, 3};
+    A = {1, 7, 3, 2, 1, 9, 3, 2, 6, 4, 4, 1, 5, 1, 3};
+    B = {3, 3, 8, 4, 7, 3};
+
+    Res = multMatParallel(A, B, n);
+
+    if (rank == 0) {
+        EXPECT_EQ(Res, res);
+    }
+}
+TEST(Multiply, MultMatrix555) {
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+    int MonN = 25;
+    int NonK = 25;
+    int MonK = 25;
+    int n = 5;
+    std::vector<int> res = {80, 40, 77, 37, 67, 35, 51, 31, 44, 28};
+    std::vector<int> A(MonN);
+    std::vector<int> B(NonK);
+    std::vector<int> Res(MonK, 0);
+
     A = {1, 7, 3, 1, 6, 2, 1, 9, 7, 3, 3, 2, 6,
-          2, 5, 4, 4, 1, 4, 8, 5, 1, 3, 6, 4};
+         2, 5, 4, 4, 1, 4, 8, 5, 1, 3, 6, 4};
     B = {3, 3, 5, 8, 7, 8, 4, 6, 2, 3, 7, 3, 8,
-          4, 1, 6, 1, 7, 5, 2, 1, 5, 1, 8, 4};
+         4, 1, 6, 1, 7, 5, 2, 1, 5, 1, 8, 4};
     Res = multMatParallel(A, B, n);
 
     if (rank == 0) {
