@@ -75,12 +75,6 @@ std::vector<int> multMatParallel(const std::vector<int>& A,
             transpose(B, k);  // транспонирование для удобной адресации
 
         int insPlace;
-        std::cout << "m = " << m << ", k = " << k << ", com = " << comm_size
-                  << ", proc = " << processes
-                  << ", size(buff) = " << buff.size() << std::endl
-                  << "Atasks = " << Atasks << ", Aother = " << Aother
-                  << ", Btasks = " << Btasks << ", Bother = " << Bother
-                  << std::endl;
         if (processes == 1) {
             // Обработка данных на глав. процессе если он единственный
             receivedAPart =
@@ -143,9 +137,6 @@ std::vector<int> multMatParallel(const std::vector<int>& A,
                     globRes = LocToGlob(globRes, k, insPlace, locRes, x, y);
                 }
             }
-            for (int i = 0; i < globRes.size(); i++)
-                std::cout << globRes[i] << ' ';
-            std::cout << std::endl;
             // обработка строк
             for (int step = 1; step <= processes; step++) {
                 // обработка строк (кроме 0го столбца) на др. процессах
@@ -186,9 +177,6 @@ std::vector<int> multMatParallel(const std::vector<int>& A,
                     y = receivedAPart.size() / n;
                     globRes = LocToGlob(globRes, k, insPlace, locRes, x, y);
                 }
-                for (int i = 0; i < globRes.size(); i++)
-                    std::cout << globRes[i] << ' ';
-                std::cout << std::endl;
 
                 // получение данных с других процессов
                 for (int p = 1; p <= processes; p++) {
@@ -207,9 +195,6 @@ std::vector<int> multMatParallel(const std::vector<int>& A,
 
                     insPlace = status.MPI_TAG;
                     globRes = LocToGlob(globRes, k, insPlace, locRes, x, y);
-                    for (int i = 0; i < globRes.size(); i++)
-                        std::cout << globRes[i] << ' ';
-                    std::cout << std::endl;
                 }
             }
         }

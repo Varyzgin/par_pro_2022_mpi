@@ -10,10 +10,10 @@ TEST(Multiply, MultMatrix532) {
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    int MonN = 15;  // 15, 25
-    int NonK = 6;   // 6, 25
-    int MonK = 10;  // 10, 25
-    int n = 3;      // 3, 5
+    int MonN = 15;
+    int NonK = 6;
+    int MonK = 10;
+    int n = 3;
     std::vector<int> res = {80, 40, 77, 37, 67, 35, 51, 31, 44, 28};
     std::vector<int> A(MonN);
     std::vector<int> B(NonK);
