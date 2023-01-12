@@ -36,7 +36,7 @@ TEST(Multiply, MultMatrix555) {
     int NonK = 25;
     int MonK = 25;
     int n = 5;
-    std::vector<int> res = {80, 40, 77, 37, 67, 35, 51, 31, 44, 28};
+    std::vector<int> res = {92, 71, 84, 87, 57, 122, 59, 140, 113, 52, 84, 62, 94, 102, 57, 83, 75, 88, 128, 81, 84, 54, 101, 116, 69};
     std::vector<int> A(MonN);
     std::vector<int> B(NonK);
     std::vector<int> Res(MonK, 0);
