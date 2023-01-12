@@ -147,8 +147,8 @@ std::vector<double> radixBatcherParallel(std::vector<double> globVec) {
             buff.push_back(locVec);
         }
         return partsBatchMerge(buff);
-
-    } else
+    } else {
         MPI_Send(locVec.data(), tasks, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
+    }
     return locVec;
 }
